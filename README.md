@@ -375,7 +375,7 @@ Shows the distribution of operating cycles across the training engines.
 
 ## RUL Distribution
 
-<img src="results/rul_distribution.png" width="700">
+<img src="results/actual_rul_distribution.png" width="700">
 
 Shows the distribution of Remaining Useful Life values used during training.
 
