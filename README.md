@@ -1,155 +1,584 @@
-# Predictive Maintenance using CNN-LSTM
+# Predictive Maintenance using LSTM
 
-This repository implements a Remaining Useful Life (RUL) prediction pipeline for the NASA C-MAPSS engine dataset. It includes preprocessing, a CNN-LSTM model training pipeline, inference, and a Streamlit dashboard for visualizing predictions.
+This project implements an end-to-end **Remaining Useful Life (RUL) prediction system** using the NASA C-MAPSS FD001 aircraft engine dataset. The project uses sensor time-series data and a PyTorch LSTM model to estimate how many operational cycles an engine has remaining before failure.
+
+The project includes data preprocessing, feature scaling, sequence generation, LSTM model training, inference, evaluation, visualization, and a Streamlit dashboard.
+
+## Project Results
+
+| Metric   |           Result |
+| -------- | ---------------: |
+| MAE      | **10.83 cycles** |
+| RMSE     | **14.63 cycles** |
+| R² Score |       **0.8760** |
+
+The model achieves an R² score of **0.876**, meaning it explains approximately 87.6% of the variation in the engine RUL values on the evaluated test set.
+
+---
 
 ## Repository Structure
 
-- `app.py` — Streamlit application for viewing predictions and engine health.
-- `src/`
-  - `model.py` — CNN-LSTM model definition.
-  - `dataset.py` — loads processed data, applies scaling, creates train/validation/test sequences, and builds PyTorch DataLoaders.
-  - `train.py` — trains the model, saves the best checkpoint, and writes training loss plots.
-  - `preprocess.py` — loads raw NASA C-MAPSS files, computes RUL, saves processed CSV files, and generates exploratory charts.
-  - `predict.py` — loads the trained model, runs inference on test engines, saves prediction results, and exports comparison plots.
-- `dataset/`
-  - `train_FD001.txt`, `test_FD001.txt`, `RUL_FD001.txt` — raw dataset files.
-  - `processed/` — contains processed `train_processed.csv`, `test_processed.csv`, and `rul_processed.csv` after preprocessing.
-- `models/`
-  - `best_model.pth` — trained model checkpoint saved by `src/train.py`.
-- `results/`
-  - prediction CSV and chart outputs produced by `src/predict.py`, `src/preprocess.py`, and `src/train.py`.
-
-## Requirements
-
-Install the Python dependencies before running any scripts.
-
-```bash
-pip install numpy pandas matplotlib scikit-learn torch streamlit
+```text
+RUL_Prediction_Project/
+│
+├── app.py
+│
+├── dataset/
+│   ├── train_FD001.txt
+│   ├── test_FD001.txt
+│   ├── RUL_FD001.txt
+│   └── processed/
+│       ├── train_processed.csv
+│       ├── test_processed.csv
+│       └── rul_processed.csv
+│
+├── src/
+│   ├── preprocess.py
+│   ├── dataset.py
+│   ├── model.py
+│   ├── train.py
+│   ├── predict.py
+│   └── evaluate.py
+│
+├── models/
+│   └── best_model.pth
+│
+├── results/
+│   ├── engine_life_distribution.png
+│   ├── rul_distribution.png
+│   ├── correlation_heatmap.png
+│   ├── loss_curve.png
+│   ├── predictions.csv
+│   ├── actual_vs_predicted_rul.png
+│   └── scatter_plot.png
+│
+├── requirements.txt
+└── README.md
 ```
 
-> If you use GPU acceleration, install the appropriate `torch` package for your CUDA version.
+---
 
-## Usage
+## Technologies Used
 
-### 1. Preprocess the data
+* Python
+* PyTorch
+* Pandas
+* NumPy
+* Scikit-learn
+* Matplotlib
+* Streamlit
 
-Generate processed CSV files and exploratory charts.
+---
+
+## Dataset
+
+The project uses the **NASA C-MAPSS FD001** turbofan engine degradation dataset.
+
+The dataset contains:
+
+* Engine ID
+* Operating cycles
+* 3 operating-condition variables
+* 21 sensor measurements
+* RUL target generated from engine failure cycles
+
+The training dataset contains **20,631 observations** and 26 original columns.
+
+---
+
+# Project Workflow
+
+```text
+NASA C-MAPSS Dataset
+        │
+        ▼
+Data Preprocessing
+        │
+        ├── Load raw TXT files
+        ├── Assign column names
+        ├── Calculate maximum engine cycle
+        └── Calculate RUL
+        │
+        ▼
+Feature Selection
+        │
+        ├── 3 Operating Settings
+        └── 21 Sensor Features
+        │
+        ▼
+MinMax Scaling
+        │
+        ▼
+Time-Series Sequence Generation
+        │
+        └── Window Size = 30 cycles
+        │
+        ▼
+Train / Validation Split
+        │
+        ▼
+LSTM Model
+        │
+        ├── 2 LSTM Layers
+        ├── Hidden Size = 128
+        ├── Fully Connected Layer = 64
+        ├── ReLU
+        └── Dropout = 0.3
+        │
+        ▼
+Model Training
+        │
+        ├── Adam Optimizer
+        ├── MSE Loss
+        ├── Learning Rate = 0.001
+        └── Early Stopping
+        │
+        ▼
+Best Model
+        │
+        ▼
+RUL Prediction
+        │
+        ▼
+Model Evaluation
+        │
+        ├── MAE
+        ├── RMSE
+        └── R²
+        │
+        ▼
+Streamlit Dashboard
+```
+
+---
+
+# Model Architecture
+
+The project uses a sequence-based LSTM neural network.
+
+```text
+Input
+30 time steps × 24 features
+        │
+        ▼
+LSTM Layer 1
+Hidden Size = 128
+        │
+        ▼
+LSTM Layer 2
+Hidden Size = 128
+        │
+        ▼
+Fully Connected
+128 → 64
+        │
+        ▼
+ReLU
+        │
+        ▼
+Dropout
+0.3
+        │
+        ▼
+Fully Connected
+64 → 1
+        │
+        ▼
+Predicted RUL
+```
+
+The model receives **30 consecutive operating cycles** and uses the temporal information from the sensor measurements to predict RUL.
+
+---
+
+# 1. Data Preprocessing
+
+Run:
 
 ```bash
 python src/preprocess.py
 ```
 
-This creates:
-- `dataset/processed/train_processed.csv`
-- `dataset/processed/test_processed.csv`
-- `dataset/processed/rul_processed.csv`
-- `results/engine_life_distribution.png`
-- `results/rul_distribution.png`
-- `results/correlation_heatmap.png`
+The preprocessing pipeline:
 
-### 2. Train the model
+1. Loads the NASA C-MAPSS TXT files.
+2. Assigns column names.
+3. Groups data by engine.
+4. Determines the maximum operating cycle of each engine.
+5. Calculates RUL for each training observation.
+6. Saves processed datasets.
+7. Generates exploratory visualizations.
 
-Train the CNN-LSTM model and save the best checkpoint.
+Generated files:
+
+```text
+dataset/processed/
+├── train_processed.csv
+├── test_processed.csv
+└── rul_processed.csv
+```
+
+---
+
+# 2. Dataset Preparation
+
+Run:
+
+```bash
+python src/dataset.py
+```
+
+The dataset pipeline:
+
+* Loads processed datasets.
+* Selects operating settings and sensor measurements.
+* Applies MinMax scaling.
+* Creates 30-cycle sliding windows.
+* Generates training, validation, and testing sequences.
+* Converts data into PyTorch tensors.
+* Creates PyTorch DataLoaders.
+
+Example input:
+
+```text
+Batch Size = 64
+Sequence Length = 30
+Features = 24
+```
+
+Therefore:
+
+```text
+Input Tensor:
+[64, 30, 24]
+```
+
+---
+
+# 3. Train the LSTM Model
+
+Run:
 
 ```bash
 python src/train.py
 ```
 
-This creates:
-- `models/best_model.pth`
-- `results/loss_curve.png`
+Training configuration:
 
-### 3. Run inference
+```text
+Epochs       : 50
+Batch Size   : 64
+Learning Rate: 0.001
+Hidden Size  : 128
+LSTM Layers  : 2
+Dropout      : 0.3
+Loss         : MSELoss
+Optimizer    : Adam
+```
 
-Generate predictions and charts for actual vs predicted RUL.
+The training process uses validation loss and saves the best-performing model checkpoint.
+
+Output:
+
+```text
+models/best_model.pth
+```
+
+Training visualization:
+
+```text
+results/loss_curve.png
+```
+
+---
+
+# 4. Generate Predictions
+
+Run:
 
 ```bash
 python src/predict.py
 ```
 
-This creates:
-- `results/predictions.csv`
-- `results/actual_vs_predicted_rul.png`
-- `results/actual_rul_distribution.png`
+The prediction pipeline:
 
-### 4. Launch the dashboard
+1. Loads the trained LSTM model.
+2. Loads the test sequences.
+3. Runs inference.
+4. Loads the actual RUL values.
+5. Compares actual and predicted RUL.
+6. Saves the prediction results.
 
-Open the Streamlit app to inspect engine predictions.
+Output:
+
+```text
+results/predictions.csv
+```
+
+Example:
+
+```text
+engine_id,cycle,actual_RUL,predicted_RUL
+1,31,112,110.80183
+2,49,98,122.77836
+3,126,69,46.070827
+4,106,82,85.60244
+```
+
+---
+
+# 5. Model Evaluation
+
+Run:
+
+```bash
+python src/evaluate.py
+```
+
+The model is evaluated using:
+
+### MAE
+
+Mean Absolute Error measures the average absolute difference between actual and predicted RUL.
+
+### RMSE
+
+Root Mean Squared Error gives greater penalty to larger prediction errors.
+
+### R²
+
+R² measures how well the model explains the variation in the target RUL values.
+
+Current results:
+
+```text
+============================================================
+MODEL EVALUATION
+============================================================
+MAE  : 10.8338
+RMSE : 14.6307
+R2   : 0.8760
+============================================================
+```
+
+---
+
+# Results and Visualizations
+
+## Engine Life Distribution
+
+<img src="results/engine_life_distribution.png" width="700">
+
+Shows the distribution of operating cycles across the training engines.
+
+---
+
+## RUL Distribution
+
+<img src="results/rul_distribution.png" width="700">
+
+Shows the distribution of Remaining Useful Life values used during training.
+
+---
+
+## Sensor Correlation Heatmap
+
+<img src="results/correlation_heatmap.png" width="700">
+
+Shows correlations between operating conditions and sensor measurements.
+
+---
+
+## Training and Validation Loss
+
+<img src="results/loss_curve.png" width="700">
+
+Shows the training and validation loss during LSTM model training.
+
+---
+
+## Actual vs Predicted RUL
+
+<img src="results/actual_vs_predicted_rul.png" width="700">
+
+Compares actual engine RUL values with the RUL predicted by the trained model.
+
+---
+
+# Prediction Results
+
+The model produces an individual RUL prediction for each test engine.
+
+Example:
+
+```text
+Engine 1
+Actual RUL    : 112
+Predicted RUL : 110.80
+```
+
+```text
+Engine 2
+Actual RUL    : 98
+Predicted RUL : 122.78
+```
+
+```text
+Engine 3
+Actual RUL    : 69
+Predicted RUL : 46.07
+```
+
+The complete predictions are stored in:
+
+```text
+results/predictions.csv
+```
+
+---
+
+# Streamlit Dashboard
+
+The project also includes an interactive Streamlit dashboard.
+
+Run:
 
 ```bash
 streamlit run app.py
 ```
 
+The dashboard provides:
+
+* Engine selection
+* Predicted RUL
+* Actual RUL
+* Engine health indication
+* Model performance metrics
+* Prediction visualization
+
 The dashboard uses:
-- `models/best_model.pth`
-- `results/predictions.csv`
 
-## Workflow
+```text
+models/best_model.pth
+results/predictions.csv
+```
 
-1. `python src/preprocess.py`
-   - load raw `dataset/*.txt`
-   - compute RUL labels
-   - save processed CSV files in `dataset/processed/`
-   - generate exploratory charts in `results/`
-2. `python src/train.py`
-   - load processed train sequences from `dataset/processed/`
-   - train the CNN-LSTM model
-   - save best weights to `models/best_model.pth`
-   - save training loss plot to `results/loss_curve.png`
-3. `python src/predict.py`
-   - load the trained model checkpoint
-   - run inference on processed test sequences
-   - save predictions and comparison charts to `results/`
-4. `streamlit run app.py`
-   - load the trained model and prediction CSV
-   - show actual vs predicted RUL and engine health status
+---
 
-## What each script does
+# Installation
 
-- `src/preprocess.py`
-  - loads raw C-MAPSS data
-  - computes `RUL` for each training observation
-  - saves processed datasets to `dataset/processed/`
-  - generates exploratory PNG charts
+Clone the repository:
 
-- `src/dataset.py`
-  - loads processed train/test CSV files
-  - scales features with `MinMaxScaler`
-  - builds sequence windows for training and test inputs
-  - creates PyTorch datasets and dataloaders
+```bash
+git clone <YOUR_GITHUB_REPOSITORY_URL>
+cd RUL_Prediction_Project
+```
 
-- `src/train.py`
-  - defines training configuration and optimizer
-  - trains the CNN-LSTM model for up to 50 epochs
-  - saves the best model checkpoint
-  - plots training and validation loss
+Create a virtual environment:
 
-- `src/predict.py`
-  - loads the saved CNN-LSTM model checkpoint
-  - reads processed test sequences
-  - loads actual `RUL` values from `dataset/processed/rul_processed.csv`
-  - saves prediction results and comparison plots
+```bash
+python -m venv .venv
+```
 
-- `app.py`
-  - loads the trained model and `results/predictions.csv`
-  - displays per-engine actual vs predicted values in Streamlit
-  - shows health status and model metrics
+Activate it on Windows:
 
-## Notes
+```bash
+.venv\Scripts\activate
+```
 
-- The current Streamlit app expects `results/predictions.csv` and `models/best_model.pth` to exist.
-- If the app fails to launch, verify those files exist and run the preprocessing, training, and prediction steps first.
-- `src/dataset.py` imports `train_loader`, `val_loader`, and `test_loader` at import time, so training begins only after dataset preparation.
+Install dependencies:
 
-## Troubleshooting
+```bash
+pip install -r requirements.txt
+```
 
-- If `streamlit` is not found, install it in the same Python environment used to run the project.
-- If `best_model.pth` is missing, rerun `python src/train.py`.
-- If `results/predictions.csv` is missing, rerun `python src/predict.py`.
+Or install manually:
 
-## Recommended order
+```bash
+pip install numpy pandas matplotlib scikit-learn torch streamlit
+```
 
-1. `python src/preprocess.py`
-2. `python src/train.py`
-3. `python src/predict.py`
-4. `streamlit run app.py`
+---
+
+# Recommended Execution Order
+
+Run the project in this order:
+
+```bash
+python src/preprocess.py
+```
+
+```bash
+python src/dataset.py
+```
+
+```bash
+python src/train.py
+```
+
+```bash
+python src/predict.py
+```
+
+```bash
+python src/evaluate.py
+```
+
+Finally:
+
+```bash
+streamlit run app.py
+```
+
+---
+
+# Key Features
+
+* Real-world industrial predictive maintenance dataset
+* Time-series sensor analysis
+* RUL calculation
+* Feature scaling
+* Sliding-window sequence generation
+* PyTorch LSTM model
+* Early stopping
+* Best-model checkpointing
+* RUL regression
+* MAE, RMSE and R² evaluation
+* Prediction visualization
+* Interactive Streamlit dashboard
+
+---
+
+# Future Improvements
+
+The current implementation provides a strong LSTM baseline. Future improvements can include:
+
+* CNN-LSTM architecture
+* Bidirectional LSTM
+* Attention mechanism
+* Transformer-based RUL prediction
+* SHAP-based sensor explainability
+* Hyperparameter optimization
+* GPU acceleration
+* Real-time sensor prediction
+* Improved predictive maintenance dashboard
+
+---
+
+# Author
+
+**Ashish Yadav**
+NIT Jamshedpur
+M.Tech — Communication System Engineering
+
+This project was developed to demonstrate practical skills in:
+
+* Machine Learning
+* Deep Learning
+* Time-Series Analysis
+* Predictive Maintenance
+* Python
+* PyTorch
+* Data Engineering
+* Model Evaluation
+* Deployment with Streamlit
